@@ -95,11 +95,19 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
   if (sol == 0x0 && !mp1_intr && psp_bl_ready)
     goto free_adev;
 
-  /* Vega 7 specific: Clear scratch registers used by ATOMBIOS (if found) */
-  if (adev->bios_scratch_reg_offset) {
-    vr_info(dev, "Clearing Vega scratch registers at %x\n", adev->bios_scratch_reg_offset);
-    for (tmp = 0; tmp < 8; tmp++)
-      WREG32(adev->bios_scratch_reg_offset + tmp, 0);
+  /* 
+   * Forcibly find and clear NBIO scratch registers.
+   * On Cezanne APUs, these are critical for the BIOS/ROM to re-initialize 
+   * the display controller (DCN). We get the base from Discovery.
+   */
+  if (adev->reg_offset[NBIF_HWIP][0]) {
+    uint32_t nbio_base = adev->reg_offset[NBIF_HWIP][0][0];
+    vr_info(dev, "Forcibly clearing NBIO scratch registers at base %x\n", nbio_base);
+    /* mmBIOS_SCRATCH_0 is typically at a known offset in NBIF/NBIO */
+    for (tmp = 0; tmp < 8; tmp++) {
+      /* Use absolute MMIO write to ensure clearing */
+      WREG32(nbio_base + 0x40 + tmp, 0); 
+    }
   }
 
   if (mp1_intr)
