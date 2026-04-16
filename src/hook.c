@@ -43,6 +43,9 @@ static int hooked_pci_dev_specific_reset(struct pci_dev *dev, int probe)
   if (!cfg)
     goto do_orig;
 
+  if (!probe)
+    pr_info("vendor_reset_hook: triggering automatic reset for %04x:%04x\n", dev->vendor, dev->device);
+
   if (probe)
     return cfg->ops->probe(cfg, dev);
 
