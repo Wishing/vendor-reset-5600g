@@ -30,6 +30,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 int amd_common_probe(const struct vendor_reset_cfg *cfg, struct pci_dev *dev)
 {
+  pr_err("vendor_reset: probing device %04x:%04x (%s)\n", dev->vendor, dev->device, cfg->info_str);
   /* disable bus reset for the card, seems to be an issue with all of them */
   dev->dev_flags |= PCI_DEV_FLAGS_NO_BUS_RESET;
   return 0;

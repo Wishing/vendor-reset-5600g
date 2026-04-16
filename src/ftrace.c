@@ -85,18 +85,20 @@ int fh_install_hook(struct ftrace_hook *hook)
   err = ftrace_set_filter_ip(&hook->ops, hook->address, 0, 0);
   if (err)
   {
-    pr_warn("ftrace_set_filter_ip() failed: %d\n", err);
+    pr_err("vendor_reset_ftrace: ftrace_set_filter_ip() failed for %s at %lx: %d\n", hook->name, hook->address, err);
     return err;
   }
 
+  pr_err("vendor_reset_ftrace: attempting to register ftrace for %s at %lx\n", hook->name, hook->address);
   err = register_ftrace_function(&hook->ops);
   if (err)
   {
-    pr_warn("register_ftrace_function() failed in fh_install_hook: %d\n", err);
+    pr_err("vendor_reset_ftrace: register_ftrace_function() failed for %s: %d\n", hook->name, err);
     ftrace_set_filter_ip(&hook->ops, hook->address, 1, 0);
     return err;
   }
 
+  pr_err("vendor_reset_ftrace: %s hook installed successfully\n", hook->name);
   return 0;
 }
 
