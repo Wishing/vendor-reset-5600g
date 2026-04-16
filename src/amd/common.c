@@ -45,8 +45,15 @@ int amd_common_pre_reset(struct vendor_reset_dev *dev)
   dev->pdev->dev_flags |= PCI_DEV_FLAGS_NO_BUS_RESET;
 
   /* do not try to reset the card under amdgpu, it will cause problems */
-  if (pdev->driver && !strcmp(pdev->driver->name, "amdgpu"))
-    return -ENOTTY;
+  if (pdev->driver)
+  {
+    vr_info(dev, "resetting device with driver: %s\n", pdev->driver->name);
+    if (!strcmp(pdev->driver->name, "amdgpu")) {
+       vr_warn(dev, "amdgpu driver detected, but proceeding with reset for debugging\n");
+    }
+  } else {
+    vr_info(dev, "resetting device with no driver attached\n");
+  }
 
   priv = kzalloc(sizeof *priv, GFP_KERNEL);
   if (!priv)
