@@ -30,9 +30,9 @@ static int __init vendor_reset_init(void)
   int ret;
   const struct vendor_reset_cfg *cfg;
 
-  pr_info("vendor_reset: version %s loading\n", "0.1.1");
+  pr_err("vendor_reset: >>> DEBUG VERSION 0.1.1-5600G-V3 LOADING <<<\n");
   for (cfg = vendor_reset_devices; cfg->vendor; ++cfg) {
-    pr_info("vendor_reset: registered support for %04x:%04x (%s)\n", 
+    pr_err("vendor_reset: [ID-LIST] support for %04x:%04x (%s)\n", 
             cfg->vendor, cfg->device, cfg->info_str);
   }
 

@@ -41,13 +41,13 @@ static int hooked_pci_dev_specific_reset(struct pci_dev *dev, int probe)
   const struct vendor_reset_cfg *cfg;
 
   if (!probe)
-    pr_info("vendor_reset_hook: pci_dev_specific_reset called for %04x:%04x\n", dev->vendor, dev->device);
+    pr_err("vendor_reset_hook: pci_dev_specific_reset called for %04x:%04x\n", dev->vendor, dev->device);
 
   cfg = vendor_reset_cfg_find(dev->vendor, dev->device);
   if (!cfg)
   {
     if (!probe)
-      pr_info("vendor_reset_hook: no config found for %04x:%04x\n", dev->vendor, dev->device);
+      pr_err("vendor_reset_hook: no config found for %04x:%04x\n", dev->vendor, dev->device);
     goto do_orig;
   }
 

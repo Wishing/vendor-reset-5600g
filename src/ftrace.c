@@ -63,7 +63,7 @@ static void notrace fh_trace_thunk(unsigned long ip, unsigned long parent_ip, st
   struct pt_regs *regs = ftrace_get_regs(fregs);
   struct ftrace_hook *hook = to_ftrace_hook(ops);
 
-  pr_debug("vendor_reset_ftrace: intercepted %s, parent_ip: %pS\n", hook->name, (void *)parent_ip);
+  pr_err("vendor_reset_ftrace: INTERCEPTED %s at %lx, caller: %pS\n", hook->name, ip, (void *)parent_ip);
 
   if (!within_module(parent_ip, THIS_MODULE))
     regs->ip = (unsigned long)hook->function;
