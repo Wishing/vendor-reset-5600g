@@ -116,9 +116,10 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
      * For Cezanne/Vega 7 (SMU v12):
      * Try Mode2 Reset (0x11) first. Mode2 is often enough to fix GFX hang
      * without killing the Display Controller (DCN) power plane.
+     * Note: smum_send_msg_to_smc returns 0 on success.
      */
     vr_info(dev, "Attempting SMU Mode2 Reset (0x11)\n");
-    if (smum_send_msg_to_smc(adev, 0x11, NULL) == 0x1) {
+    if (smum_send_msg_to_smc(adev, 0x11, NULL) == 0) {
       vr_info(dev, "SMU Mode2 Reset successful, skipping Mode1\n");
       msleep(500);
       goto reset_done;
