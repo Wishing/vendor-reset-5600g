@@ -113,19 +113,14 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
   if (mp1_intr)
   {
     /* 
-     * For Cezanne/Vega 7 (SMU v12):
-     * Try Mode2 Reset (0x11) first. 
+     * Cezanne/Vega 7 (SMU v12):
+     * Skip Mode2 as it seems to cause system-wide hangs on some 5600G setups.
+     * We go straight to Mode1, but prepare the SMU first.
      */
-    vr_info(dev, "Attempting SMU Mode2 Reset (0x11)\n");
-    if (smum_send_msg_to_smc(adev, 0x11, NULL) == 0) {
-      vr_info(dev, "SMU Mode2 Reset successful\n");
-      msleep(1000);
-      goto reset_done;
-    }
-    
-    /* If Mode2 fails, fall back to Mode1 */
-    vr_info(dev, "Mode2 failed, trying Mode1 reset sequence\n");
+    vr_info(dev, "Preparing SMU for Mode1 Reset\n");
     smum_send_msg_to_smc(adev, 0x10, NULL); /* DisallowGfxOff */
+    smum_send_msg_to_smc_with_parameter(adev, 0x42, 2, NULL); /* GfxDeviceDriverReset */
+    msleep(200);
   }
 
   vr_info(dev, "triggering PSP Mode1 Reset for Cezanne (Vega 7)\n");
@@ -143,8 +138,11 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
   /* reset command */
   WREG32_SOC15(MP0, 0, mmMP0_SMN_C2PMSG_64, GFX_CTRL_CMD_ID_MODE1_RST);
   
-  /* Critical: Cezanne needs significant time to recover display paths */
-  msleep(2000);
+  /* 
+   * Critical for APU: Cezanne needs a LOT of time to recover display paths
+   * and re-sync with the system memory controller after a Mode1 reset.
+   */
+  msleep(3000);
 
   /* wait for ACK */
   offset = SOC15_REG_OFFSET(MP0, 0, mmMP0_SMN_C2PMSG_33);
