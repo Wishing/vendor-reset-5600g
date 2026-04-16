@@ -113,21 +113,20 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
   if (mp1_intr)
   {
     /* 
-     * For Cezanne/Vega 7 (SMU v12), the message IDs are different from Navi.
-     * 0x42 (66) is GfxDeviceDriverReset.
-     * 0x10 (16) is DisallowGfxOff.
+     * For Cezanne/Vega 7 (SMU v12):
+     * Try Mode2 Reset (0x11) first. Mode2 is often enough to fix GFX hang
+     * without killing the Display Controller (DCN) power plane.
      */
-    vr_info(dev, "Preparing SMU v12 for reset\n");
-    smum_send_msg_to_smc(adev, 0x10, NULL); /* DisallowGfxOff */
-    
-    /* Try Cezanne specific reset message 0x42 */
-    if (smum_send_msg_to_smc_with_parameter(adev, 0x42, 2, NULL) == 0x1) {
-      vr_info(dev, "SMU v12 GfxDeviceDriverReset (0x42) accepted\n");
-    } else {
-      /* Fallback to 0x4 if 0x42 is rejected */
-      smum_send_msg_to_smc_with_parameter(adev, 0x4, 2, NULL);
+    vr_info(dev, "Attempting SMU Mode2 Reset (0x11)\n");
+    if (smum_send_msg_to_smc(adev, 0x11, NULL) == 0x1) {
+      vr_info(dev, "SMU Mode2 Reset successful, skipping Mode1\n");
+      msleep(500);
+      goto reset_done;
     }
-    msleep(200);
+    
+    /* If Mode2 fails or is unsupported, prepare for Mode1 */
+    vr_info(dev, "Mode2 unsupported or failed, falling back to PSP Mode1\n");
+    smum_send_msg_to_smc(adev, 0x10, NULL); /* DisallowGfxOff */
   }
 
   vr_info(dev, "triggering PSP Mode1 Reset for Cezanne (Vega 7)\n");
@@ -160,7 +159,18 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
 
   vr_info(dev, "mode1 reset succeeded\n");
 
+reset_done:
   pci_restore_state(dev->pdev);
+
+  /* Clear scratch registers again after reset to ensure BIOS sees a clean slate */
+  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_0, 0);
+  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_1, 0);
+  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_2, 0);
+  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_3, 0);
+  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_4, 0);
+  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_5, 0);
+  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_6, 0);
+  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_7, 0);
 
   for (timeout = 100000; timeout; --timeout)
   {
