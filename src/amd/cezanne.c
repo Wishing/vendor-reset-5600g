@@ -113,16 +113,18 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
   if (mp1_intr)
   {
     /* 
-     * For Cezanne/Vega 7, we need to tell the SMU that the driver is initiating a reset.
-     * 0x4 is typically GfxDeviceDriverReset in SMU v12.
+     * For Cezanne/Vega 7, if 0x4 fails, it might be using a different protocol.
+     * We try DisallowGfxOff (0x10) first to keep the power rails active.
      */
-    vr_info(dev, "Sending GfxDeviceDriverReset message to SMU\n");
+    vr_info(dev, "Preparing SMU for reset (DisallowGfxOff)\n");
+    smum_send_msg_to_smc(adev, 0x10, NULL); 
+    
+    /* 
+     * GfxDeviceDriverReset on some Cezanne firmware is 0x4, on others it is 0x42.
+     * We'll try to be silent if it fails.
+     */
     smum_send_msg_to_smc_with_parameter(adev, 0x4, 2, NULL); 
-    msleep(100);
-
-    /* Attempt to quiesce SMU */
-    smum_send_msg_to_smc(adev, PPSMC_MSG_DisallowGfxOff, NULL);
-    smum_send_msg_to_smc(adev, PPSMC_MSG_PrepareMp1ForReset, NULL);
+    msleep(200);
   }
 
   vr_info(dev, "triggering PSP Mode1 Reset for Cezanne (Vega 7)\n");
@@ -139,7 +141,9 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
 
   /* reset command */
   WREG32_SOC15(MP0, 0, mmMP0_SMN_C2PMSG_64, GFX_CTRL_CMD_ID_MODE1_RST);
-  msleep(500);
+  
+  /* Critical: Cezanne needs more time to recover from Mode1 reset */
+  msleep(1000);
 
   /* wait for ACK */
   offset = SOC15_REG_OFFSET(MP0, 0, mmMP0_SMN_C2PMSG_33);
