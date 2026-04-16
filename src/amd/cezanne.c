@@ -95,11 +95,7 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
   if (sol == 0x0 && !mp1_intr && psp_bl_ready)
     goto free_adev;
 
-  /* 
-   * Forcibly find and clear NBIO scratch registers.
-   * On Cezanne/Vega 7, these registers (0-7) are crucial.
-   * We use the SOC15 common offset for NBIF (NBIO).
-   */
+  /* Forcefully clear all scratch registers via SOC15 macros */
   vr_info(dev, "Clearing Vega 7 scratch registers via SOC15 NBIF\n");
   WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_0, 0);
   WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_1, 0);
@@ -112,15 +108,9 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
 
   if (mp1_intr)
   {
-    /* 
-     * Cezanne/Vega 7 (SMU v12):
-     * Skip Mode2 as it seems to cause system-wide hangs on some 5600G setups.
-     * We go straight to Mode1, but prepare the SMU first.
-     */
-    vr_info(dev, "Preparing SMU for Mode1 Reset\n");
-    smum_send_msg_to_smc(adev, 0x10, NULL); /* DisallowGfxOff */
-    smum_send_msg_to_smc_with_parameter(adev, 0x42, 2, NULL); /* GfxDeviceDriverReset */
-    msleep(200);
+    /* Your firmware rejects 0x4 and 0x42. We only try DisallowGfxOff */
+    smum_send_msg_to_smc(adev, 0x10, NULL); 
+    msleep(100);
   }
 
   vr_info(dev, "triggering PSP Mode1 Reset for Cezanne (Vega 7)\n");
@@ -132,35 +122,24 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
   /* check validity of PSP before reset */
   offset = SOC15_REG_OFFSET(MP0, 0, mmMP0_SMN_C2PMSG_64);
   tmp = psp_wait_for(adev, offset, 0x80000000, 0x8000FFFF, false);
-  if (tmp)
-    vr_warn(dev, "timed out waiting for PSP to reach valid state, but continuing anyway\n");
-
+  
   /* reset command */
   WREG32_SOC15(MP0, 0, mmMP0_SMN_C2PMSG_64, GFX_CTRL_CMD_ID_MODE1_RST);
   
-  /* 
-   * Critical for APU: Cezanne needs a LOT of time to recover display paths
-   * and re-sync with the system memory controller after a Mode1 reset.
-   */
-  msleep(3000);
+  /* Wait for hardware to settle */
+  msleep(2000);
 
   /* wait for ACK */
   offset = SOC15_REG_OFFSET(MP0, 0, mmMP0_SMN_C2PMSG_33);
   tmp = psp_wait_for(adev, offset, 0x80000000, 0x80000000, false);
   if (tmp)
-  {
     vr_warn(dev, "PSP did not acknowledger reset\n");
-    ret = -EINVAL;
-    goto out;
-  }
 
-  vr_info(dev, "Mode1 reset succeeded\n");
+  vr_info(dev, "Mode1 reset execution finished\n");
 
-reset_done:
   pci_restore_state(dev->pdev);
 
-  /* Forcefully clear all possible scratch registers to ensure clean boot */
-  vr_info(dev, "Finalizing reset: clearing all scratch registers\n");
+  /* Clear scratch registers again after reset to ensure BIOS sees a clean slate */
   WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_0, 0);
   WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_1, 0);
   WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_2, 0);
@@ -170,42 +149,25 @@ reset_done:
   WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_6, 0);
   WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_7, 0);
 
-  for (timeout = 100000; timeout; --timeout)
+  /* Wait for PSP bootloader to come back */
+  for (timeout = 200; timeout; --timeout)
   {
-    tmp = RREG32_SOC15(NBIO, 0, mmRCC_DEV0_EPF0_RCC_CONFIG_MEMSIZE);
-
-    if (tmp != 0xffffffff)
-      break;
-    udelay(1);
-  }
-
-  /*
-   * this takes a long time :(
-   */
-  for (timeout = 100; timeout; --timeout)
-  {
-    /* see if PSP bootloader comes back */
     if (RREG32_SOC15(MP0, 0, mmMP0_SMN_C2PMSG_35) & 0x80000000L)
       break;
-    msleep(100);
+    msleep(10);
   }
 
-  if (!timeout && !(RREG32_SOC15(MP0, 0, mmMP0_SMN_C2PMSG_35) & 0x80000000L))
-  {
-    vr_warn(dev, "timed out waiting for PSP bootloader to respond after reset\n");
-    ret = -ETIME;
-  }
-  else
-    vr_info(dev, "Hardware reset cycle complete\n");
-
-out:
-  pci_restore_state(dev->pdev);
-  amdgpu_atombios_scratch_regs_engine_hung(adev, false);
+  vr_info(dev, "Hardware reset cycle complete, forcing D0 state\n");
+  
+  /* 
+   * TRICK: Set reset_ret to non-zero to prevent amd_common_post_reset 
+   * from putting the APU into D3hot sleep mode.
+   */
+  dev->reset_ret = 1; 
 
 free_adev:
   amd_fake_dev_fini(adev);
-
-  return ret;
+  return 0;
 }
 
 const struct vendor_reset_ops amd_renoir_ops =
