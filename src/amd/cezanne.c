@@ -57,16 +57,13 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
 
   if (!amdgpu_get_bios(adev))
   {
-    vr_err(dev, "amdgpu_get_bios failed: %d\n", ret);
-    ret = -ENOTSUPP;
-    goto free_adev;
+    vr_warn(dev, "amdgpu_get_bios failed, proceeding without AtomBIOS (common on APUs)\n");
   }
-
-  ret = atom_bios_init(adev);
-  if (ret)
+  else
   {
-    vr_err(dev, "atom_bios_init failed: %d\n", ret);
-    goto free_adev;
+    ret = atom_bios_init(adev);
+    if (ret)
+      vr_warn(dev, "atom_bios_init failed: %d\n", ret);
   }
 
   /* it's important we wait for the SOC to be ready */
@@ -98,10 +95,12 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
   if (sol == 0x0 && !mp1_intr && psp_bl_ready)
     goto free_adev;
 
-  /* Vega 7 specific: Clear scratch registers used by ATOMBIOS */
-  vr_info(dev, "Clearing Vega scratch registers\n");
-  for (tmp = 0; tmp < 8; tmp++)
-    WREG32(adev->bios_scratch_reg_offset + tmp, 0);
+  /* Vega 7 specific: Clear scratch registers used by ATOMBIOS (if found) */
+  if (adev->bios_scratch_reg_offset) {
+    vr_info(dev, "Clearing Vega scratch registers at %x\n", adev->bios_scratch_reg_offset);
+    for (tmp = 0; tmp < 8; tmp++)
+      WREG32(adev->bios_scratch_reg_offset + tmp, 0);
+  }
 
   if (mp1_intr)
   {
@@ -111,7 +110,8 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
   }
 
   vr_info(dev, "triggering PSP Mode1 Reset for Cezanne (Vega 7)\n");
-  amdgpu_atombios_scratch_regs_engine_hung(adev, true);
+  if (adev->bios_scratch_reg_offset)
+    amdgpu_atombios_scratch_regs_engine_hung(adev, true);
 
   pci_save_state(dev->pdev);
 
