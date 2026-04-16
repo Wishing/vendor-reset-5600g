@@ -52,16 +52,23 @@ static int resolve_hook_address(struct ftrace_hook *hook)
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0))
 static void notrace fh_trace_thunk(unsigned long ip, unsigned long parent_ip, struct ftrace_ops *ops, struct pt_regs *regs)
 {
-#else
-static void notrace fh_trace_thunk(unsigned long ip, unsigned long parent_ip, struct ftrace_ops *ops, struct ftrace_regs *fregs)
-{
-  struct pt_regs *regs = ftrace_get_regs(fregs);
-#endif
   struct ftrace_hook *hook = to_ftrace_hook(ops);
 
   if (!within_module(parent_ip, THIS_MODULE))
     regs->ip = (unsigned long)hook->function;
 }
+#else
+static void notrace fh_trace_thunk(unsigned long ip, unsigned long parent_ip, struct ftrace_ops *ops, struct ftrace_regs *fregs)
+{
+  struct pt_regs *regs = ftrace_get_regs(fregs);
+  struct ftrace_hook *hook = to_ftrace_hook(ops);
+
+  pr_debug("vendor_reset_ftrace: intercepted %s, parent_ip: %pS\n", hook->name, (void *)parent_ip);
+
+  if (!within_module(parent_ip, THIS_MODULE))
+    regs->ip = (unsigned long)hook->function;
+}
+#endif
 
 int fh_install_hook(struct ftrace_hook *hook)
 {
