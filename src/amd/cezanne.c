@@ -97,18 +97,18 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
 
   /* 
    * Forcibly find and clear NBIO scratch registers.
-   * On Cezanne APUs, these are critical for the BIOS/ROM to re-initialize 
-   * the display controller (DCN). We get the base from Discovery.
+   * On Cezanne/Vega 7, these registers (0-7) are crucial.
+   * We use the SOC15 common offset for NBIF (NBIO).
    */
-  if (adev->reg_offset[NBIF_HWIP][0]) {
-    uint32_t nbio_base = adev->reg_offset[NBIF_HWIP][0][0];
-    vr_info(dev, "Forcibly clearing NBIO scratch registers at base %x\n", nbio_base);
-    /* mmBIOS_SCRATCH_0 is typically at a known offset in NBIF/NBIO */
-    for (tmp = 0; tmp < 8; tmp++) {
-      /* Use absolute MMIO write to ensure clearing */
-      WREG32(nbio_base + 0x40 + tmp, 0); 
-    }
-  }
+  vr_info(dev, "Clearing Vega 7 scratch registers via SOC15 NBIF\n");
+  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_0, 0);
+  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_1, 0);
+  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_2, 0);
+  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_3, 0);
+  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_4, 0);
+  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_5, 0);
+  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_6, 0);
+  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_7, 0);
 
   if (mp1_intr)
   {
