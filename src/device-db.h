@@ -102,6 +102,13 @@ Place, Suite 330, Boston, MA 02111-1307 USA
     {PCI_VENDOR_ID_ATI, 0x7360, op, DEVICE_INFO(AMD_NAVI12)}, \
     {PCI_VENDOR_ID_ATI, 0x7362, op, DEVICE_INFO(AMD_NAVI12)}
 
+#define _AMD_RENOIR(op) \
+    {PCI_VENDOR_ID_ATI, 0x1636, op, DEVICE_INFO(AMD_RENOIR)}
+
+#define _AMD_CEZANNE(op) \
+    {PCI_VENDOR_ID_ATI, 0x1638, op, DEVICE_INFO(AMD_CEZANNE)}, \
+    {PCI_VENDOR_ID_ATI, 0x164c, op, DEVICE_INFO(AMD_CEZANNE)}
+
 #define _AMD_ARCTURUS(op) \
     {PCI_VENDOR_ID_ATI, 0x738c, op, DEVICE_INFO(AMD_VEGA20)} //Instinct MI100
 
@@ -115,6 +122,8 @@ static const struct vendor_reset_cfg vendor_reset_devices[] = {
     _AMD_NAVI14(&amd_navi10_ops),
     _AMD_NAVI12(&amd_navi10_ops),
     _AMD_ARCTURUS(&amd_vega20_ops),
+    _AMD_RENOIR(&amd_renoir_ops),
+    _AMD_CEZANNE(&amd_cezanne_ops),
 
     /* end of array guard */
     {.vendor = 0}

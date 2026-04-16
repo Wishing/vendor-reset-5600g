@@ -27,9 +27,13 @@ enum amd_device_type
   AMD_NAVI10,
   AMD_NAVI12,
   AMD_NAVI14,
+  AMD_RENOIR,
+  AMD_CEZANNE,
 };
 
 extern const struct vendor_reset_ops amd_polaris10_ops;
 extern const struct vendor_reset_ops amd_vega10_ops;
 extern const struct vendor_reset_ops amd_vega20_ops;
 extern const struct vendor_reset_ops amd_navi10_ops;
+extern const struct vendor_reset_ops amd_renoir_ops;
+extern const struct vendor_reset_ops amd_cezanne_ops;

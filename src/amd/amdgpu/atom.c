@@ -29,7 +29,11 @@
 #include <linux/slab.h>
 #include <linux/delay.h>
 #include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+#include <linux/unaligned.h>
+#else
 #include <asm/unaligned.h>
+#endif
 
 //#include <drm/drm_util.h>
 //#include <drm/drm_print.h>
