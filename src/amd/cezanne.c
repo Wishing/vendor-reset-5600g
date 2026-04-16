@@ -112,7 +112,15 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
 
   if (mp1_intr)
   {
-    /* Attempt to quiesce SMU, but don't fail if messages aren't supported */
+    /* 
+     * For Cezanne/Vega 7, we need to tell the SMU that the driver is initiating a reset.
+     * 0x4 is typically GfxDeviceDriverReset in SMU v12.
+     */
+    vr_info(dev, "Sending GfxDeviceDriverReset message to SMU\n");
+    smum_send_msg_to_smc_with_parameter(adev, 0x4, 2, NULL); 
+    msleep(100);
+
+    /* Attempt to quiesce SMU */
     smum_send_msg_to_smc(adev, PPSMC_MSG_DisallowGfxOff, NULL);
     smum_send_msg_to_smc(adev, PPSMC_MSG_PrepareMp1ForReset, NULL);
   }
