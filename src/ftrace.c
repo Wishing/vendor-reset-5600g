@@ -26,20 +26,13 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "ftrace.h"
 
-/*
- * Much of this file was inspired by https://www.apriorit.com/dev-blog/546-hooking-linux-functions-2
- *
- * Honestly the whole removal of kallsyms_lookup_name is hella fishy, Google.
- * Thank you, Filip Pynckels
- * http://users.telenet.be/pynckels/2020-2-Linux-kernel-unexported-kallsyms-functions.pdf
- */
 static int resolve_hook_address(struct ftrace_hook *hook)
 {
   struct kprobe kp = { .symbol_name = hook->name };
 
   if (register_kprobe(&kp))
   {
-    pr_warn("unresolved symbol %s\n", hook->name);
+    pr_warn("vendor_reset_ftrace: unresolved symbol %s\n", hook->name);
     return -ENOENT;
   }
   hook->address = (unsigned long)kp.addr;
@@ -63,9 +56,7 @@ static void notrace fh_trace_thunk(unsigned long ip, unsigned long parent_ip, st
   struct pt_regs *regs = ftrace_get_regs(fregs);
   struct ftrace_hook *hook = to_ftrace_hook(ops);
 
-  pr_err("vendor_reset_ftrace: INTERCEPTED %s at %lx, caller: %pS\n", hook->name, ip, (void *)parent_ip);
-
-  if (!within_module(parent_ip, THIS_MODULE))
+  if (regs && !within_module(parent_ip, THIS_MODULE))
     regs->ip = (unsigned long)hook->function;
 }
 #endif
@@ -84,39 +75,22 @@ int fh_install_hook(struct ftrace_hook *hook)
 
   err = ftrace_set_filter_ip(&hook->ops, hook->address, 0, 0);
   if (err)
-  {
-    pr_err("vendor_reset_ftrace: ftrace_set_filter_ip() failed for %s at %lx: %d\n", hook->name, hook->address, err);
     return err;
-  }
 
-  pr_err("vendor_reset_ftrace: attempting to register ftrace for %s at %lx\n", hook->name, hook->address);
   err = register_ftrace_function(&hook->ops);
   if (err)
   {
-    pr_err("vendor_reset_ftrace: register_ftrace_function() failed for %s: %d\n", hook->name, err);
     ftrace_set_filter_ip(&hook->ops, hook->address, 1, 0);
     return err;
   }
 
-  pr_err("vendor_reset_ftrace: %s hook installed successfully\n", hook->name);
   return 0;
 }
 
 void fh_remove_hook(struct ftrace_hook *hook)
 {
-  int err;
-
-  err = unregister_ftrace_function(&hook->ops);
-  if (err)
-  {
-    pr_warn("unregister_ftrace_function() failed: %d\n", err);
-  }
-
-  err = ftrace_set_filter_ip(&hook->ops, hook->address, 1, 0);
-  if (err)
-  {
-    pr_warn("ftrace_set_filter_ip() failed in fh_remove_hook: %d\n", err);
-  }
+  unregister_ftrace_function(&hook->ops);
+  ftrace_set_filter_ip(&hook->ops, hook->address, 1, 0);
 }
 
 int fh_install_hooks(struct ftrace_hook *hooks)

@@ -30,7 +30,6 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 
 int amd_common_probe(const struct vendor_reset_cfg *cfg, struct pci_dev *dev)
 {
-  pr_err("vendor_reset: probing device %04x:%04x (%s)\n", dev->vendor, dev->device, cfg->info_str);
   /* disable bus reset for the card, seems to be an issue with all of them */
   dev->dev_flags |= PCI_DEV_FLAGS_NO_BUS_RESET;
   return 0;
@@ -46,15 +45,8 @@ int amd_common_pre_reset(struct vendor_reset_dev *dev)
   dev->pdev->dev_flags |= PCI_DEV_FLAGS_NO_BUS_RESET;
 
   /* do not try to reset the card under amdgpu, it will cause problems */
-  if (pdev->driver)
-  {
-    vr_info(dev, "resetting device with driver: %s\n", pdev->driver->name);
-    if (!strcmp(pdev->driver->name, "amdgpu")) {
-       vr_warn(dev, "amdgpu driver detected, but proceeding with reset for debugging\n");
-    }
-  } else {
-    vr_info(dev, "resetting device with no driver attached\n");
-  }
+  if (pdev->driver && !strcmp(pdev->driver->name, "amdgpu"))
+    return -ENOTTY;
 
   priv = kzalloc(sizeof *priv, GFP_KERNEL);
   if (!priv)

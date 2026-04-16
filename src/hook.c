@@ -37,11 +37,7 @@ __attribute__((disable_tail_calls))
 #endif
 static int hooked_pci_dev_specific_reset(struct pci_dev *dev, int probe)
 {
-  int ret;
   const struct vendor_reset_cfg *cfg;
-
-  if (!probe)
-    pr_err("vendor_reset_hook: pci_dev_specific_reset called for %04x:%04x\n", dev->vendor, dev->device);
 
   cfg = vendor_reset_cfg_find(dev->vendor, dev->device);
   if (!cfg)
@@ -50,9 +46,7 @@ static int hooked_pci_dev_specific_reset(struct pci_dev *dev, int probe)
   if (probe)
     return cfg->ops->probe(cfg, dev);
 
-  ret = vendor_reset_dev_locked(cfg, dev);
-  if (!ret || ret != -ENOTTY)
-    return ret;
+  return vendor_reset_dev_locked(cfg, dev);
 
 do_orig:
   return orig_pci_dev_specific_reset(dev, probe);
