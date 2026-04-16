@@ -114,19 +114,17 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
   {
     /* 
      * For Cezanne/Vega 7 (SMU v12):
-     * Try Mode2 Reset (0x11) first. Mode2 is often enough to fix GFX hang
-     * without killing the Display Controller (DCN) power plane.
-     * Note: smum_send_msg_to_smc returns 0 on success.
+     * Try Mode2 Reset (0x11) first. 
      */
     vr_info(dev, "Attempting SMU Mode2 Reset (0x11)\n");
     if (smum_send_msg_to_smc(adev, 0x11, NULL) == 0) {
-      vr_info(dev, "SMU Mode2 Reset successful, skipping Mode1\n");
-      msleep(500);
+      vr_info(dev, "SMU Mode2 Reset successful\n");
+      msleep(1000);
       goto reset_done;
     }
     
-    /* If Mode2 fails or is unsupported, prepare for Mode1 */
-    vr_info(dev, "Mode2 unsupported or failed, falling back to PSP Mode1\n");
+    /* If Mode2 fails, fall back to Mode1 */
+    vr_info(dev, "Mode2 failed, trying Mode1 reset sequence\n");
     smum_send_msg_to_smc(adev, 0x10, NULL); /* DisallowGfxOff */
   }
 
@@ -146,7 +144,7 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
   WREG32_SOC15(MP0, 0, mmMP0_SMN_C2PMSG_64, GFX_CTRL_CMD_ID_MODE1_RST);
   
   /* Critical: Cezanne needs significant time to recover display paths */
-  msleep(1500);
+  msleep(2000);
 
   /* wait for ACK */
   offset = SOC15_REG_OFFSET(MP0, 0, mmMP0_SMN_C2PMSG_33);
@@ -158,12 +156,13 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
     goto out;
   }
 
-  vr_info(dev, "mode1 reset succeeded\n");
+  vr_info(dev, "Mode1 reset succeeded\n");
 
 reset_done:
   pci_restore_state(dev->pdev);
 
-  /* Clear scratch registers again after reset to ensure BIOS sees a clean slate */
+  /* Forcefully clear all possible scratch registers to ensure clean boot */
+  vr_info(dev, "Finalizing reset: clearing all scratch registers\n");
   WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_0, 0);
   WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_1, 0);
   WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_2, 0);
@@ -199,7 +198,7 @@ reset_done:
     ret = -ETIME;
   }
   else
-    vr_info(dev, "PSP mode1 reset successful\n");
+    vr_info(dev, "Hardware reset cycle complete\n");
 
 out:
   pci_restore_state(dev->pdev);
