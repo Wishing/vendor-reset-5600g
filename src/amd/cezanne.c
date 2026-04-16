@@ -75,28 +75,18 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
     udelay(1);
   }
 
-  if (sol == ~1L)
-  {
-    vr_warn(dev, "Timed out waiting for SOL to be valid\n");
-  }
-
-  /* collect some info for logging for now */
+  /* collect some info for logging */
   smu_resp = RREG32_SOC15(MP1, 0, mmMP1_SMN_C2PMSG_90);
   mp1_intr = (RREG32_PCIE(MP1_Public |
                           (smnMP1_FIRMWARE_FLAGS & 0xffffffff)) &
               MP1_FIRMWARE_FLAGS__INTERRUPTS_ENABLED_MASK) >>
              MP1_FIRMWARE_FLAGS__INTERRUPTS_ENABLED__SHIFT;
   psp_bl_ready = !!(RREG32_SOC15(MP0, 0, mmMP0_SMN_C2PMSG_35) & 0x80000000L);
-  vr_info(dev, "SMU response reg: %x, sol reg: %x, mp1 intr enabled? %s, bl ready? %s\n",
-          smu_resp, sol, mp1_intr ? "yes" : "no",
-          psp_bl_ready ? "yes" : "no");
-
-  /* okay, if we're in this state, we're probably reset */
-  if (sol == 0x0 && !mp1_intr && psp_bl_ready)
-    goto free_adev;
+  vr_info(dev, "SMU resp: %x, sol: %x, mp1: %s, bl: %s\n",
+          smu_resp, sol, mp1_intr ? "on" : "off",
+          psp_bl_ready ? "ready" : "not ready");
 
   /* Forcefully clear all scratch registers via SOC15 macros */
-  vr_info(dev, "Clearing Vega 7 scratch registers via SOC15 NBIF\n");
   WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_0, 0);
   WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_1, 0);
   WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_2, 0);
@@ -108,61 +98,24 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
 
   if (mp1_intr)
   {
-    /* Your firmware rejects 0x4 and 0x42. We only try DisallowGfxOff */
-    smum_send_msg_to_smc(adev, 0x10, NULL); 
-    msleep(100);
+    /* Cezanne Final Attempt: Mode2 + Mode1 */
+    vr_info(dev, "Attempting SMU Mode2 Reset (0x11)\n");
+    smum_send_msg_to_smc(adev, 0x11, NULL);
+    msleep(1000);
   }
 
-  vr_info(dev, "triggering PSP Mode1 Reset for Cezanne (Vega 7)\n");
-  if (adev->bios_scratch_reg_offset)
-    amdgpu_atombios_scratch_regs_engine_hung(adev, true);
-
+  vr_info(dev, "Triggering PSP Mode1 Reset\n");
   pci_save_state(dev->pdev);
-
-  /* check validity of PSP before reset */
-  offset = SOC15_REG_OFFSET(MP0, 0, mmMP0_SMN_C2PMSG_64);
-  tmp = psp_wait_for(adev, offset, 0x80000000, 0x8000FFFF, false);
-  
-  /* reset command */
   WREG32_SOC15(MP0, 0, mmMP0_SMN_C2PMSG_64, GFX_CTRL_CMD_ID_MODE1_RST);
-  
-  /* Wait for hardware to settle */
-  msleep(2000);
-
-  /* wait for ACK */
-  offset = SOC15_REG_OFFSET(MP0, 0, mmMP0_SMN_C2PMSG_33);
-  tmp = psp_wait_for(adev, offset, 0x80000000, 0x80000000, false);
-  if (tmp)
-    vr_warn(dev, "PSP did not acknowledger reset\n");
-
-  vr_info(dev, "Mode1 reset execution finished\n");
-
+  msleep(3000);
   pci_restore_state(dev->pdev);
 
-  /* Clear scratch registers again after reset to ensure BIOS sees a clean slate */
-  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_0, 0);
-  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_1, 0);
-  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_2, 0);
-  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_3, 0);
-  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_4, 0);
-  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_5, 0);
-  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_6, 0);
-  WREG32_SOC15(NBIF, 0, mmBIOS_SCRATCH_7, 0);
-
-  /* Wait for PSP bootloader to come back */
-  for (timeout = 200; timeout; --timeout)
-  {
-    if (RREG32_SOC15(MP0, 0, mmMP0_SMN_C2PMSG_35) & 0x80000000L)
-      break;
-    msleep(10);
-  }
+  /* Force PCIe Command register back to active state */
+  pci_write_config_word(dev->pdev, PCI_COMMAND, PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER | PCI_COMMAND_IO);
 
   vr_info(dev, "Hardware reset cycle complete, forcing D0 state\n");
   
-  /* 
-   * TRICK: Set reset_ret to non-zero to prevent amd_common_post_reset 
-   * from putting the APU into D3hot sleep mode.
-   */
+  /* Prevent D3hot in post_reset */
   dev->reset_ret = 1; 
 
 free_adev:
