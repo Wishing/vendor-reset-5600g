@@ -113,17 +113,20 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
   if (mp1_intr)
   {
     /* 
-     * For Cezanne/Vega 7, if 0x4 fails, it might be using a different protocol.
-     * We try DisallowGfxOff (0x10) first to keep the power rails active.
+     * For Cezanne/Vega 7 (SMU v12), the message IDs are different from Navi.
+     * 0x42 (66) is GfxDeviceDriverReset.
+     * 0x10 (16) is DisallowGfxOff.
      */
-    vr_info(dev, "Preparing SMU for reset (DisallowGfxOff)\n");
-    smum_send_msg_to_smc(adev, 0x10, NULL); 
+    vr_info(dev, "Preparing SMU v12 for reset\n");
+    smum_send_msg_to_smc(adev, 0x10, NULL); /* DisallowGfxOff */
     
-    /* 
-     * GfxDeviceDriverReset on some Cezanne firmware is 0x4, on others it is 0x42.
-     * We'll try to be silent if it fails.
-     */
-    smum_send_msg_to_smc_with_parameter(adev, 0x4, 2, NULL); 
+    /* Try Cezanne specific reset message 0x42 */
+    if (smum_send_msg_to_smc_with_parameter(adev, 0x42, 2, NULL) == 0x1) {
+      vr_info(dev, "SMU v12 GfxDeviceDriverReset (0x42) accepted\n");
+    } else {
+      /* Fallback to 0x4 if 0x42 is rejected */
+      smum_send_msg_to_smc_with_parameter(adev, 0x4, 2, NULL);
+    }
     msleep(200);
   }
 
@@ -142,8 +145,8 @@ static int amd_cezanne_reset(struct vendor_reset_dev *dev)
   /* reset command */
   WREG32_SOC15(MP0, 0, mmMP0_SMN_C2PMSG_64, GFX_CTRL_CMD_ID_MODE1_RST);
   
-  /* Critical: Cezanne needs more time to recover from Mode1 reset */
-  msleep(1000);
+  /* Critical: Cezanne needs significant time to recover display paths */
+  msleep(1500);
 
   /* wait for ACK */
   offset = SOC15_REG_OFFSET(MP0, 0, mmMP0_SMN_C2PMSG_33);
