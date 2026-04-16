@@ -1,5 +1,14 @@
-userccflags += -I$(src)/../include -g
-userprogs += vendor-reset
-always-y += $(userprogs)
+CC = gcc
+CFLAGS = -I. -I../include -O2 -Wall
+TARGET = vendor-reset
+SRCS = vendor-reset.c ucommon.c
 
-vendor-reset-objs += vendor-reset.o ucommon.o
+all: $(TARGET)
+
+$(TARGET): $(SRCS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRCS)
+
+clean:
+	rm -f $(TARGET)
+
+.PHONY: all clean

@@ -28,7 +28,6 @@ module_param(install_hook, bool, 0);
 
 static bool hook_installed = false;
 static int (*orig_pci_dev_specific_reset)(struct pci_dev *dev, int probe);
-static int (*orig___pci_dev_reset)(struct pci_dev *dev, int probe);
 
 /* TCO breaks the hook, we must disable it for this function */
 #if defined(__GNUC__) && !defined(__llvm__)
@@ -36,51 +35,31 @@ __attribute__((optimize("-fno-optimize-sibling-calls")))
 #elif defined(__clang__)
 __attribute__((disable_tail_calls))
 #endif
-static int hooked_pci_dev_reset_common(struct pci_dev *dev, int probe)
-{
-  const struct vendor_reset_cfg *cfg;
-
-  cfg = vendor_reset_cfg_find(dev->vendor, dev->device);
-  if (!cfg)
-    return -ENOTTY;
-
-  if (probe)
-    return cfg->ops->probe(cfg, dev);
-
-  return vendor_reset_dev_locked(cfg, dev);
-}
-
 static int hooked_pci_dev_specific_reset(struct pci_dev *dev, int probe)
 {
   int ret;
+  const struct vendor_reset_cfg *cfg;
 
   if (!probe)
     pr_err("vendor_reset_hook: pci_dev_specific_reset called for %04x:%04x\n", dev->vendor, dev->device);
 
-  ret = hooked_pci_dev_reset_common(dev, probe);
-  if (ret != -ENOTTY)
+  cfg = vendor_reset_cfg_find(dev->vendor, dev->device);
+  if (!cfg)
+    goto do_orig;
+
+  if (probe)
+    return cfg->ops->probe(cfg, dev);
+
+  ret = vendor_reset_dev_locked(cfg, dev);
+  if (!ret || ret != -ENOTTY)
     return ret;
 
+do_orig:
   return orig_pci_dev_specific_reset(dev, probe);
-}
-
-static int hooked___pci_dev_reset(struct pci_dev *dev, int probe)
-{
-  int ret;
-
-  if (!probe)
-    pr_err("vendor_reset_hook: __pci_dev_reset called for %04x:%04x\n", dev->vendor, dev->device);
-
-  ret = hooked_pci_dev_reset_common(dev, probe);
-  if (ret != -ENOTTY)
-    return ret;
-
-  return orig___pci_dev_reset(dev, probe);
 }
 
 struct ftrace_hook fh_hooks[] = {
   HOOK("pci_dev_specific_reset", &orig_pci_dev_specific_reset, hooked_pci_dev_specific_reset),
-  HOOK("__pci_dev_reset", &orig___pci_dev_reset, hooked___pci_dev_reset),
   {0},
 };
 
